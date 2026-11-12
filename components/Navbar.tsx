@@ -1,0 +1,5 @@
+import Link from "next/link";
+import { ArrowUpRight, ScanSearch } from "lucide-react";
+export default function Navbar() {
+  return <header className="relative z-10 border-b border-slate-100/80 bg-white/90 backdrop-blur-xl"><nav className="mx-auto flex h-[76px] max-w-6xl items-center justify-between px-5 sm:px-8" aria-label="Main navigation"><Link href="/" className="flex items-center gap-2.5" aria-label="Trace home"><span className="brand-mark"><ScanSearch size={19} strokeWidth={2.2} /></span><span className="text-[19px] font-semibold tracking-[-0.04em] text-slate-950">trace<span className="text-indigo-500">.</span></span></Link><div className="flex items-center gap-5 sm:gap-7"><Link href="/how-reverse-image-search-works" className="hidden text-sm font-medium text-slate-600 transition hover:text-slate-950 md:block">How it works</Link><Link href="/about" className="hidden text-sm font-medium text-slate-600 transition hover:text-slate-950 sm:block">About</Link><Link href="/#home" className="nav-cta">Start searching <ArrowUpRight size={15} /></Link></div></nav></header>;
+}

@@ -9,6 +9,7 @@ A Next.js App Router application that accepts an image, uploads a prepared image
 - A SerpApi account and API key
 - A public domain for production
 
+
 ## Local setup
 
 ```bash

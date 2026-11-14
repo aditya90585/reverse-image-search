@@ -12,34 +12,45 @@ const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FUNCTION_PAYLOAD = 4 * 1024 * 1024;
 
 async function prepareForServerUpload(original: File): Promise<File> {
-  // Vercel Functions have a request-body ceiling below the UI's 10 MB file limit.
-  // Re-encode in the browser first; the server then performs the stricter 500 KB SerpApi conversion.
+  // Keep the browser-to-Vercel request below the function payload ceiling while
+  // retaining as much source detail as possible for server-side preparation.
   const bitmap = await createImageBitmap(original);
   try {
-    let width = bitmap.width;
-    let height = bitmap.height;
-    const longest = Math.max(width, height);
-    if (longest > 2400) {
-      const scale = 2400 / longest;
-      width = Math.round(width * scale);
-      height = Math.round(height * scale);
-    }
+    const longest = Math.max(bitmap.width, bitmap.height);
+    const initialScale = Math.min(1, 3200 / longest);
+    const baseWidth = Math.max(1, Math.round(bitmap.width * initialScale));
+    const baseHeight = Math.max(1, Math.round(bitmap.height * initialScale));
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Your browser could not prepare this image. Try another browser or image.");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, width, height);
-    context.drawImage(bitmap, 0, 0, width, height);
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      throw new Error("Your browser could not prepare this image. Try another browser or image.");
+    }
 
-    for (const quality of [0.88, 0.8, 0.72, 0.64, 0.56, 0.48]) {
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-      if (blob && blob.size <= MAX_FUNCTION_PAYLOAD) {
-        return new File([blob], "reverse-search-upload.jpg", { type: "image/jpeg" });
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.fillStyle = "#ffffff";
+
+    const scales = [1, 0.85, 0.7, 0.55];
+    const qualities = [0.92, 0.86, 0.8, 0.74];
+
+    for (const scale of scales) {
+      canvas.width = Math.max(1, Math.round(baseWidth * scale));
+      canvas.height = Math.max(1, Math.round(baseHeight * scale));
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+      for (const quality of qualities) {
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", quality),
+        );
+        if (blob && blob.size <= MAX_FUNCTION_PAYLOAD) {
+          return new File([blob], "reverse-search-upload.jpg", { type: "image/jpeg" });
+        }
       }
     }
-    throw new Error("This image could not be prepared for upload. Try a smaller image.");
+
+    throw new Error("This image could not be prepared for upload. Try a smaller image or a tighter crop.");
   } finally {
     bitmap.close();
   }

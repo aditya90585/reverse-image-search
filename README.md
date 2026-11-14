@@ -1,6 +1,8 @@
-# Trace — Production-ready reverse image search MVP
+# Trace — Reverse image search MVP
 
-A Next.js App Router application that accepts an image, uploads a prepared image to SerpApi's Image API, runs Google Lens, and displays the actual public-web matches returned by the provider. It includes informational pages, technical SEO, sitemap/robots, privacy and terms pages, optional AdSense placements, an `ads.txt` endpoint, and API abuse controls.
+A Next.js App Router application that accepts an image, prepares it with Sharp, uploads it to SerpApi's Image API, runs Google Lens, and displays public-web results returned by the provider. It includes separate provider-exact and visual-match groups, URL deduplication, informational pages, technical SEO, privacy and terms pages, optional AdSense placements, an `ads.txt` endpoint, and API abuse controls.
+
+**Accuracy boundary:** Trace does not identify people, verify identity, or independently prove that two images are the same. "Lens exact group" means Google Lens returned the item in its `exact_matches` collection. Visual matches can share broad visual features such as objects, clothing, colors, and composition. Trace cannot search unindexed/private images or the entire web.
 
 ## Requirements
 
@@ -45,7 +47,7 @@ If Upstash is not configured, the API uses a per-process in-memory limiter. That
 2. The server validates the file again and uses Sharp to create a JPEG no larger than SerpApi's 500 KB image-upload limit.
 3. The server posts the image as multipart form data to `https://serpapi.com/image` and receives a temporary `image_id`.
 4. The server calls `https://serpapi.com/search.json` with `engine=google_lens`, `image_id`, and `type=all`.
-5. The server normalizes exact and visual matches, validates outbound URLs, and returns only result fields from the provider.
+5. The server keeps `exact_matches` and `visual_matches` separate, validates outbound URLs, removes duplicate source-page URLs (including common tracking parameters), and returns only normalized result fields from the provider. The UI lets users filter these groups separately. It does not manufacture confidence percentages or infer same-person matches.
 
 SerpApi documentation: https://serpapi.com/image-api and https://serpapi.com/google-lens-api. Uploaded image IDs expire after approximately 10 minutes. The image is sent to SerpApi; do not upload confidential or private images.
 
@@ -108,4 +110,14 @@ npm start        # run production build locally
 
 ## Important limitations
 
-SEO cannot guarantee rankings, traffic, AdSense approval, or earnings. The search endpoint makes paid third-party API calls, so rate limiting and usage monitoring matter. Search results are provider output and are not proof of image ownership, origin, identity, or licence status. Trace is intended for public image-source discovery, not identifying or tracking people.
+SEO cannot guarantee rankings, traffic, AdSense approval, or earnings. The search endpoint calls SerpApi. Check the current plan, free allowance, and billing terms in your SerpApi account: free hosting on Vercel does not make provider requests free. Rate limiting and usage monitoring matter. Search results are provider output and are not proof of image ownership, origin, identity, or licence status. The exact-match label reflects Google's result bucket, not an independent pixel-level verification by Trace. Perceptual hashes and image embeddings only help compare an image against a collection of candidate images; they do not discover images across the web by themselves. Adding a model without a lawful, searchable candidate corpus would not solve ordinary-person reverse search. Trace is intended for public image-source discovery, not identifying or tracking people.
+
+See [`docs/SEARCH-QUALITY.md`](docs/SEARCH-QUALITY.md) for the accuracy boundary, no-new-spend policy, and a repeatable evaluation plan.\n\n## Accuracy changes in this version
+
+- Browser upload preparation tries higher-quality JPEG encodes and only reduces dimensions when needed to stay below the Vercel request-body limit.
+- Server-side Sharp processing tries larger output dimensions and higher quality first, then progressively reduces dimensions to fit SerpApi's 500 KB image-upload ceiling.
+- Google Lens `exact_matches` and `visual_matches` are preserved as distinct result types.
+- Duplicate source pages with common tracking parameters or URL fragments are collapsed, keeping the first result returned by Google Lens.
+- The results interface provides separate filters for Lens exact-group results and visual matches, and explains what those labels mean.
+
+These changes improve input preservation and make provider output easier to interpret. They cannot force Google Lens to find unindexed images, identify an ordinary person, or make visual matches equivalent to identity matches.

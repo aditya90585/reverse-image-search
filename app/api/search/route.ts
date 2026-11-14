@@ -42,7 +42,16 @@ export async function POST(request: Request) {
     const preparedImage = await validateAndPrepareImage(file);
     const imageId = await uploadImageToSerpApi(preparedImage, apiKey);
     const search = await searchGoogleLens(imageId, apiKey);
-    return json({ results: search.results, total: search.results.length, queryId: search.queryId, searchedAt: new Date().toISOString() });
+    const exactCount = search.results.filter((result) => result.matchType === "provider_exact").length;
+    const visualCount = search.results.length - exactCount;
+    return json({
+      results: search.results,
+      total: search.results.length,
+      exactCount,
+      visualCount,
+      queryId: search.queryId,
+      searchedAt: new Date().toISOString(),
+    });
   } catch (error) {
     if (error instanceof ImageValidationError) return json({ error: error.message }, 400);
     const message = error instanceof Error ? error.message : "Something went wrong while searching this image.";

@@ -29,6 +29,29 @@ function number(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+/**
+ * Remove URL fragments and common analytics parameters so the same source
+ * page is not shown several times just because tracking parameters differ.
+ * Meaningful query parameters are retained.
+ */
+function canonicalizePageUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  url.hash = "";
+  for (const key of [...url.searchParams.keys()]) {
+    const normalized = key.toLowerCase();
+    if (
+      normalized.startsWith("utm_") ||
+      ["gclid", "fbclid", "igshid", "mc_cid", "mc_eid"].includes(normalized)
+    ) {
+      url.searchParams.delete(key);
+    }
+  }
+  url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/$/, "");
+  url.searchParams.sort();
+  return url.toString();
+}
+
 async function readProviderError(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json();
@@ -41,10 +64,22 @@ async function readProviderError(response: Response): Promise<string> {
 
 function mapProviderError(message: string, status?: number): Error {
   const normalized = message.toLowerCase();
-  if (status === 401 || status === 403 || normalized.includes("invalid api key") || normalized.includes("api key is invalid")) {
+  if (
+    status === 401 ||
+    status === 403 ||
+    normalized.includes("invalid api key") ||
+    normalized.includes("api key is invalid")
+  ) {
     return new Error("SerpApi rejected the API key. Check SERPAPI_API_KEY in your environment settings.");
   }
-  if (status === 429 || normalized.includes("rate limit") || normalized.includes("monthly searches") || normalized.includes("searches per month") || normalized.includes("run out of searches") || normalized.includes("credit")) {
+  if (
+    status === 429 ||
+    normalized.includes("rate limit") ||
+    normalized.includes("monthly searches") ||
+    normalized.includes("searches per month") ||
+    normalized.includes("run out of searches") ||
+    normalized.includes("credit")
+  ) {
     return new Error("The SerpApi request limit or available credits have been reached. Check your SerpApi account usage.");
   }
   if (normalized.includes("image_id") || normalized.includes("image upload")) {
@@ -67,7 +102,9 @@ export async function uploadImageToSerpApi(image: Buffer, apiKey: string): Promi
       cache: "no-store",
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") throw new Error("Image upload timed out. Please try again.");
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error("Image upload timed out. Please try again.");
+    }
     throw new Error("Could not connect to the image search provider. Check your connection and try again.");
   }
 
@@ -80,7 +117,10 @@ export async function uploadImageToSerpApi(image: Buffer, apiKey: string): Promi
   return payload.image_id;
 }
 
-export async function searchGoogleLens(imageId: string, apiKey: string): Promise<{ results: SearchResult[]; queryId?: string }> {
+export async function searchGoogleLens(
+  imageId: string,
+  apiKey: string,
+): Promise<{ results: SearchResult[]; queryId?: string }> {
   const url = new URL(SERPAPI_SEARCH_URL);
   url.searchParams.set("engine", "google_lens");
   url.searchParams.set("image_id", imageId);
@@ -91,9 +131,15 @@ export async function searchGoogleLens(imageId: string, apiKey: string): Promise
 
   let response: Response;
   try {
-    response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), cache: "no-store" });
+    response = await fetch(url, {
+      method: "GET",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      cache: "no-store",
+    });
   } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") throw new Error("Google Lens search timed out. Please try again.");
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error("Google Lens search timed out. Please try again.");
+    }
     throw new Error("Could not connect to Google Lens through SerpApi. Please try again.");
   }
 
@@ -107,30 +153,46 @@ export async function searchGoogleLens(imageId: string, apiKey: string): Promise
     throw mapProviderError(typeof payload.error === "string" ? payload.error : "Search failed.");
   }
 
-  const candidates: Array<{ value: unknown; exact: boolean }> = [];
-  if (Array.isArray(payload.exact_matches)) candidates.push(...payload.exact_matches.map((value) => ({ value, exact: true })));
-  if (Array.isArray(payload.visual_matches)) candidates.push(...payload.visual_matches.map((value) => ({ value, exact: false })));
+  // Preserve Google's distinction. Do not infer an "exact" match from visual
+  // similarity, titles, clothing, faces, or other metadata.
+  const candidates: Array<{ value: unknown; matchType: "provider_exact" | "visual" }> = [];
+  if (Array.isArray(payload.exact_matches)) {
+    candidates.push(...payload.exact_matches.map((value) => ({ value, matchType: "provider_exact" as const })));
+  }
+  if (Array.isArray(payload.visual_matches)) {
+    candidates.push(...payload.visual_matches.map((value) => ({ value, matchType: "visual" as const })));
+  }
 
-  const seen = new Set<string>();
+  const seenPages = new Set<string>();
   const results: SearchResult[] = [];
+
   for (const candidate of candidates) {
     if (!isRecord(candidate.value)) continue;
     const item = candidate.value;
-    const pageUrl = safeHttpUrl(item.link);
-    if (!pageUrl || seen.has(pageUrl)) continue;
-    seen.add(pageUrl);
-    let domain = "";
-    try { domain = new URL(pageUrl).hostname.replace(/^www\./, ""); } catch { /* already validated */ }
+    const rawPageUrl = safeHttpUrl(item.link);
+    if (!rawPageUrl) continue;
+
+    const pageUrl = canonicalizePageUrl(rawPageUrl);
+    if (seenPages.has(pageUrl)) continue;
+    seenPages.add(pageUrl);
+
+    let hostname = "";
+    try {
+      hostname = new URL(pageUrl).hostname.replace(/^www\./, "");
+    } catch {
+      continue;
+    }
 
     results.push({
-      id: `${results.length}-${pageUrl}`,
-      title: text(item.title) ?? domain,
+      id: `${candidate.matchType}-${results.length}`,
+      title: text(item.title) ?? hostname,
       pageUrl,
-      domain: text(item.source) ?? domain,
+      domain: text(item.source) ?? hostname,
       thumbnailUrl: safeHttpUrl(item.thumbnail),
       imageUrl: safeHttpUrl(item.image),
       source: text(item.source),
-      exactMatch: candidate.exact || item.exact_matches === true,
+      matchType: candidate.matchType,
+      exactMatch: candidate.matchType === "provider_exact",
       width: number(item.image_width),
       height: number(item.image_height),
     });

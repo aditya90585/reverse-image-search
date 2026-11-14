@@ -11,20 +11,26 @@ export async function checkSearchRateLimit(identifier: string): Promise<{ allowe
 
   if (redisUrl && redisToken) {
     try {
-      const key = `trace:search:${keyHash}`;
-      const response = await fetch(`${redisUrl}/incr/${key}`, { headers: { Authorization: `Bearer ${redisToken}` }, cache: "no-store", signal: AbortSignal.timeout(2500) });
+      const script = "local count = redis.call('INCR', KEYS[1]); if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; return count";
+      const response = await fetch(redisUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${redisToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(["EVAL", script, "1", `visufind:search:burst:${keyHash}`, String(WINDOW_SECONDS)]),
+        cache: "no-store",
+        signal: AbortSignal.timeout(2500),
+      });
       if (!response.ok) throw new Error("Rate-limit store unavailable");
-      const data = await response.json() as { result?: number };
+      const data = await response.json() as { result?: number; error?: string };
+      if (data.error) throw new Error(data.error);
       const count = Number(data.result ?? 0);
-      if (count === 1) await fetch(`${redisUrl}/expire/${key}/${WINDOW_SECONDS}`, { headers: { Authorization: `Bearer ${redisToken}` }, cache: "no-store", signal: AbortSignal.timeout(2500) });
-      return { allowed: count <= MAX_REQUESTS, retryAfter: WINDOW_SECONDS };
+      return { allowed: count > 0 && count <= MAX_REQUESTS, retryAfter: WINDOW_SECONDS };
     } catch {
-      // Fail closed: do not allow unmetered paid-provider requests if configured Redis is unavailable.
+      // Fail closed if configured Redis is unavailable.
       return { allowed: false, retryAfter: 30 };
     }
   }
 
-  // Development fallback only. Serverless instances do not share this memory; configure Upstash for production.
+  // Local development fallback only. Serverless instances do not share this memory.
   const now = Date.now();
   const current = localHits.get(keyHash);
   if (!current || current.resetAt <= now) {

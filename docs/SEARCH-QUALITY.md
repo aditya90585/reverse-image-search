@@ -1,4 +1,4 @@
-# Trace search quality: what the implementation can and cannot do
+# VisuFind search quality: what the implementation can and cannot do
 
 ## What changed in this version
 
@@ -12,7 +12,7 @@
 
 ## Why this does not add CLIP or face recognition
 
-An embedding model can compare a query image with candidate images. It does not search the public web by itself. Trace would still need a lawful, searchable candidate-image corpus or a search provider that returns candidate image URLs. Running CLIP against a few Google Lens thumbnails may produce a visual similarity score, but it cannot prove that two photographs show the same person. It can also rank the same clothes, scene, pose, or colors highly.
+An embedding model can compare a query image with candidate images. It does not search the public web by itself. VisuFind would still need a lawful, searchable candidate-image corpus or a search provider that returns candidate image URLs. Running CLIP against a few Google Lens thumbnails may produce a visual similarity score, but it cannot prove that two photographs show the same person. It can also rank the same clothes, scene, pose, or colors highly.
 
 For that reason this version does not add a large model download, a new paid API, or misleading "same person" confidence scores. It preserves the available provider signal and makes its limits visible.
 
@@ -41,7 +41,7 @@ Record for each query: whether the known source was returned, its position, irre
 
 ## Important limitations
 
-- Google Lens controls web discovery and result generation. Trace cannot force it to index private or unknown images.
+- Google Lens controls web discovery and result generation. VisuFind cannot force it to index private or unknown images.
 - An exact-group result is a provider classification, not an independent pixel-level proof.
 - A visual match is not evidence of identity.
 - Search results can change as the provider's index changes.

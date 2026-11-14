@@ -25,10 +25,6 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function number(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
 /**
  * Remove URL fragments and common analytics parameters so the same source
  * page is not shown several times just because tracking parameters differ.
@@ -188,13 +184,9 @@ export async function searchGoogleLens(
       title: text(item.title) ?? hostname,
       pageUrl,
       domain: text(item.source) ?? hostname,
-      thumbnailUrl: safeHttpUrl(item.thumbnail),
-      imageUrl: safeHttpUrl(item.image),
       source: text(item.source),
       matchType: candidate.matchType,
       exactMatch: candidate.matchType === "provider_exact",
-      width: number(item.image_width),
-      height: number(item.image_height),
     });
   }
 

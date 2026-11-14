@@ -7,11 +7,11 @@ const adsenseEnabled = process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true";
 const adsenseHasSlots = Boolean(process.env.NEXT_PUBLIC_ADSENSE_SLOT_HOME || process.env.NEXT_PUBLIC_ADSENSE_SLOT_GUIDES);
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL), applicationName: SITE_NAME,
-  title: { default: "Trace – Free Reverse Image Search", template: "%s | Trace" },
+  title: { default: "VisuFind – Reverse Image Search", template: "%s | VisuFind" },
   description: SITE_DESCRIPTION,
   keywords: ["reverse image search", "search by image", "find image source", "visual image search", "find image online", "Google Lens search"],
-  openGraph: { type: "website", url: SITE_URL, siteName: SITE_NAME, title: "Trace – Free Reverse Image Search", description: SITE_DESCRIPTION, images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Trace reverse image search" }] },
-  twitter: { card: "summary_large_image", title: "Trace – Free Reverse Image Search", description: SITE_DESCRIPTION, images: ["/og-image.png"] },
+  openGraph: { type: "website", url: SITE_URL, siteName: SITE_NAME, title: "VisuFind – Reverse Image Search", description: SITE_DESCRIPTION, images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "VisuFind reverse image search" }] },
+  twitter: { card: "summary_large_image", title: "VisuFind – Reverse Image Search", description: SITE_DESCRIPTION, images: ["/og-image.png"] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
   ...(process.env.GOOGLE_SITE_VERIFICATION ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } } : {}),
 };

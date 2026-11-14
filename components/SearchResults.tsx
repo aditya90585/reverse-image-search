@@ -101,7 +101,7 @@ export default function SearchResults({
             Search results <span className="ml-1 text-base font-medium text-slate-400">({results.length})</span>
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Public webpages returned by Google Lens through SerpApi.
+            Source pages returned by Google Lens through SerpApi.
           </p>
         </div>
         <button
@@ -136,7 +136,7 @@ export default function SearchResults({
 
       <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-900">
         “Lens exact matches” means Google Lens placed a result in its exact-match group.
-        Trace does not independently verify that two files are pixel-identical or show the same person.
+        VisuFind does not independently verify that two files are pixel-identical or show the same person.
         “Visual matches” can share objects, clothing, colors, composition, or other visual features.
       </div>
 
@@ -187,7 +187,7 @@ export default function SearchResults({
       )}
 
       <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-slate-400">
-        <Globe2 size={13} /> Results reflect publicly indexed pages and may change over time.
+        <Globe2 size={13} /> VisuFind links to source pages rather than rehosting result images. Finding an image does not grant reuse permission.
       </p>
     </section>
   );

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, Check, FileImage, ImagePlus, LoaderCircle, RefreshCw, Search, ShieldCheck, UploadCloud, X } from "lucide-react";
-import type { ApiError, SearchResponse } from "@/types/search";
+import type { ApiError, SearchResponse, SearchUsage } from "@/types/search";
 import { formatBytes } from "@/lib/utils";
 import SearchResults from "@/components/SearchResults";
 import LoadingState from "@/components/LoadingState";
@@ -56,6 +56,8 @@ async function prepareForServerUpload(original: File): Promise<File> {
   }
 }
 
+function ZapIcon() { return <span aria-hidden="true">✦</span>; }
+
 export default function ImageUploader() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -64,6 +66,16 @@ export default function ImageUploader() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<SearchResponse | null>(null);
+  const [usage, setUsage] = useState<SearchUsage | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/usage", { cache: "no-store" })
+      .then(async (res) => res.ok ? await res.json() as SearchUsage : null)
+      .then((data) => { if (active && data) setUsage(data); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
@@ -94,9 +106,13 @@ export default function ImageUploader() {
       const form = new FormData(); form.append("image", uploadFile);
       const result = await fetch("/api/search", { method: "POST", body: form });
       const payload = await result.json() as SearchResponse | ApiError;
-      if (!result.ok) throw new Error("error" in payload ? payload.error : "The search could not be completed. Please try again.");
+      if (!result.ok) {
+        if ("usage" in payload && payload.usage) setUsage(payload.usage);
+        throw new Error("error" in payload ? payload.error : "The search could not be completed. Please try again.");
+      }
       if (!("results" in payload) || !Array.isArray(payload.results)) throw new Error("The server returned an unexpected response. Please try again.");
       setResponse(payload);
+      if (payload.usage) setUsage(payload.usage);
       window.setTimeout(() => document.getElementById("search-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     } catch (err) {
       setError(err instanceof Error ? err.message : "A network error occurred. Please try again.");
@@ -105,7 +121,9 @@ export default function ImageUploader() {
 
   return (
     <div>
-      {!response && <div className="upload-panel rounded-[28px] border border-slate-200/90 bg-white p-3 shadow-[0_24px_80px_-36px_rgba(39,45,91,0.24)] sm:p-5">
+      {!response && <>
+        {usage && <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-xs font-semibold text-indigo-950"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-indigo-600"><ZapIcon /></span><span>{usage.monthlyCapReached ? "Monthly search allowance reached" : `${usage.remainingToday} of ${usage.dailyLimit} free searches left today`}</span></div><span className="text-[11px] text-indigo-700/75">Resets at midnight UTC · no account required</span></div>}
+        <div className="upload-panel rounded-[28px] border border-slate-200/90 bg-white p-3 shadow-[0_24px_80px_-36px_rgba(39,45,91,0.24)] sm:p-5">
         {!file ? (
           <div onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget === event.target) setDragging(false); }} onDrop={handleDrop} onClick={() => inputRef.current?.click()} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }} className={`drop-zone flex min-h-[270px] cursor-pointer flex-col items-center justify-center rounded-[21px] border border-dashed px-5 py-10 text-center transition ${dragging ? "drop-zone-active" : "border-slate-300 bg-slate-50/50 hover:border-indigo-300 hover:bg-indigo-50/30"}`}>
             <div className="upload-icon mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white text-indigo-600 shadow-sm ring-1 ring-slate-100"><UploadCloud size={25} strokeWidth={1.8} /></div>
@@ -123,12 +141,13 @@ export default function ImageUploader() {
           </div>
         )}
         <input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { chooseFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-        <button onClick={searchImage} disabled={!file || loading} className="search-button mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-45">
-          {loading ? <><LoaderCircle size={18} className="animate-spin" /> Searching the web…</> : <><Search size={18} /> Search image <ArrowRight size={16} className="ml-1" /></>}
+        <button onClick={searchImage} disabled={!file || loading || usage?.remainingToday === 0 || usage?.monthlyCapReached} className="search-button mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-45">
+          {loading ? <><LoaderCircle size={18} className="animate-spin" /> Searching the web…</> : usage?.monthlyCapReached ? <>Monthly search limit reached</> : usage?.remainingToday === 0 ? <>Daily free limit reached</> : <><Search size={18} /> Search image <ArrowRight size={16} className="ml-1" /></>}
         </button>
         {error && <div role="alert" className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-left text-sm text-rose-700"><AlertCircle size={17} className="mt-0.5 shrink-0" /><span>{error}</span></div>}
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400"><ShieldCheck size={13} /> Your image is sent to SerpApi for this search and is not stored by Trace.</div>
-      </div>}
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400"><ShieldCheck size={13} /> Your image is sent to SerpApi for this search and is not kept in a VisuFind upload gallery.</div>
+        </div>
+      </>}
       {loading && <LoadingState />}
       {response && <><div className="mb-4 flex flex-col items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 sm:flex-row"><div className="flex items-center gap-2 text-sm font-medium text-emerald-800"><span className="grid h-7 w-7 place-items-center rounded-full bg-white"><Check size={15} /></span> Search complete · {response.total} {response.total === 1 ? "match" : "matches"} found</div><button onClick={clearSearch} className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:text-emerald-950"><ImagePlus size={14} /> Search another image</button></div><SearchResults results={response.results} onReset={clearSearch} /></>}
       {!file && !response && <p className="sr-only">Select an image to enable reverse image search.</p>}
